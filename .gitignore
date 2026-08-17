@@ -6,3 +6,6 @@ npm-debug.log*
 *.apk
 public/chess-model/**/*.zip
 public/chess-model/* copy/
+
+# Local Netlify folder
+.netlify
