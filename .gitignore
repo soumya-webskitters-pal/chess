@@ -2,3 +2,7 @@ node_modules
 dist
 .vite
 npm-debug.log*
+.DS_Store
+*.apk
+public/chess-model/**/*.zip
+public/chess-model/* copy/

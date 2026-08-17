@@ -1,0 +1,6 @@
+{
+  "appId": "com.chessarena.app",
+  "appName": "Chess Arena",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

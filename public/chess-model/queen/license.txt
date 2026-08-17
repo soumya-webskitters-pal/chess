@@ -1,0 +1,11 @@
+Model Information:
+* title:	Realistic Chess Piece – Queen
+* source:	https://sketchfab.com/3d-models/realistic-chess-piece-queen-7e4ff80fa2aa4af081dd03aab56ec2ff
+* author:	BenAissa_Karim (https://sketchfab.com/BenAissa_Karim)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Realistic Chess Piece – Queen" (https://sketchfab.com/3d-models/realistic-chess-piece-queen-7e4ff80fa2aa4af081dd03aab56ec2ff) by BenAissa_Karim (https://sketchfab.com/BenAissa_Karim) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

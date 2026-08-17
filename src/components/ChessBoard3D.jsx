@@ -49,7 +49,7 @@ function BoardCoordinates() {
   );
 }
 
-function PieceSprite({ piece, palette }) {
+function PieceSprite({ piece, palette, onClick }) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -74,7 +74,14 @@ function PieceSprite({ piece, palette }) {
   useEffect(() => () => texture.dispose(), [texture]);
 
   return (
-    <sprite position={[0, 0.43, 0]} scale={[0.72, 0.72, 0.72]}>
+    <sprite
+      position={[0, 0.43, 0]}
+      scale={[0.72, 0.72, 0.72]}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
+      }}
+    >
       <spriteMaterial map={texture} transparent depthTest={false} depthWrite={false} />
     </sprite>
   );
@@ -95,7 +102,7 @@ function BoardModel() {
   );
 }
 
-const MODEL_ROOT = import.meta.env.BASE_URL;
+const MODEL_ROOT = `${import.meta.env.BASE_URL}chess-model/`;
 const PIECE_MODELS = {
   p: `${MODEL_ROOT}pawn/scene.gltf`,
   r: `${MODEL_ROOT}rook/scene.gltf`,
@@ -107,7 +114,7 @@ const PIECE_MODELS = {
 
 const PIECE_HEIGHTS = { p: 0.88, r: 1.05, n: 1.12, b: 1.18, q: 1.3, k: 1.38 };
 
-function ChessPieceModel({ type, color, palette, selected, moveOffset = { x: 0, z: 0 } }) {
+function ChessPieceModel({ type, color, palette, selected, moveOffset = { x: 0, z: 0 }, onClick }) {
   const { scene } = useGLTF(PIECE_MODELS[type]);
   const pieceColor = color === 'w' ? palette.white : palette.black;
   const animatedGroup = useRef();
@@ -173,7 +180,15 @@ function ChessPieceModel({ type, color, palette, selected, moveOffset = { x: 0, 
   });
 
   return (
-    <group ref={animatedGroup} position={[moveOffset.x, moveOffset.x || moveOffset.z ? 0.2 : 0, moveOffset.z]}>
+    <group
+      ref={animatedGroup}
+      position={[moveOffset.x, moveOffset.x || moveOffset.z ? 0.2 : 0, moveOffset.z]}
+      onClick={(event) => {
+        if (!onClick) return;
+        event.stopPropagation();
+        onClick();
+      }}
+    >
       <primitive object={model} scale={scale} position={position} />
     </group>
   );
@@ -498,7 +513,7 @@ function BoardTile({ x, z, isDark, selected, moveTarget, kingInCheck, piece, mov
         </mesh>
       )}
 
-      {piece && topView && <PieceSprite piece={piece} palette={palette} />}
+      {piece && topView && <PieceSprite piece={piece} palette={palette} onClick={onClick} />}
 
       {piece && !topView && (
         <Suspense fallback={null}>
@@ -508,6 +523,7 @@ function BoardTile({ x, z, isDark, selected, moveTarget, kingInCheck, piece, mov
             palette={palette}
             selected={selected}
             moveOffset={moveOffset}
+            onClick={onClick}
           />
         </Suspense>
       )}

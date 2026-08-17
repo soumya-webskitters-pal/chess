@@ -1,0 +1,11 @@
+Model Information:
+* title:	chess bishop
+* source:	https://sketchfab.com/3d-models/chess-bishop-9c591eb6ac8344ce9fb6166fdf988482
+* author:	mastergames2435 (https://sketchfab.com/mastergames243534)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "chess bishop" (https://sketchfab.com/3d-models/chess-bishop-9c591eb6ac8344ce9fb6166fdf988482) by mastergames2435 (https://sketchfab.com/mastergames243534) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Chess } from 'chess.js';
+import { useProgress } from '@react-three/drei';
 import ChessBoard3D, { PieceMoveDemo3D, RuleMoveDemo3D } from './components/ChessBoard3D';
 import SettingsDrawer from './components/SettingsDrawer';
 import { getBestMove, getLegalMoves, PALETTE_MAP, PIECE_GLYPHS } from './lib/chessEngine';
@@ -14,6 +15,68 @@ const defaultSettings = {
   enableUndo: true,
   palette: 'classic',
 };
+
+function AssetLoadingScreen({ progress }) {
+  const roundedProgress = Math.min(100, Math.max(0, Math.round(progress)));
+
+  return (
+    <div
+      className="asset-loader"
+      style={{
+        '--loader-poster-desktop': `url(${import.meta.env.BASE_URL}poster-desktop.png)`,
+        '--loader-poster-mobile': `url(${import.meta.env.BASE_URL}poster-mobile.png)`,
+      }}
+      role="status"
+      aria-live="polite"
+      aria-label={`Loading chess assets: ${roundedProgress}%`}
+    >
+      <div className="asset-loader-progress-wrap">
+        <div className="asset-loader-progress" aria-hidden="true">
+          <span style={{ width: `${roundedProgress}%` }} />
+        </div>
+        <strong className="asset-loader-value">{roundedProgress}%</strong>
+      </div>
+    </div>
+  );
+}
+
+const CONFETTI_PIECES = Array.from({ length: 42 }, (_, index) => ({
+  id: index,
+  left: (index * 37 + 9) % 100,
+  delay: ((index * 13) % 18) / 10,
+  duration: 2.4 + ((index * 7) % 14) / 10,
+  rotation: (index * 47) % 360,
+}));
+
+function GameOverOverlay({ result, onNewMatch }) {
+  return (
+    <div className="game-over-layer" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+      {result.type === 'win' && (
+        <div className="confetti-field" aria-hidden="true">
+          {CONFETTI_PIECES.map((piece) => (
+            <i
+              key={piece.id}
+              style={{
+                '--confetti-left': `${piece.left}%`,
+                '--confetti-delay': `${piece.delay}s`,
+                '--confetti-duration': `${piece.duration}s`,
+                '--confetti-rotation': `${piece.rotation}deg`,
+                '--confetti-color': `hsl(${(piece.id * 53) % 360} 88% 65%)`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+      <div className="game-over-card">
+        <span className="game-over-kicker">{result.type === 'win' ? 'Checkmate' : 'Game drawn'}</span>
+        <div className="game-over-emblem" aria-hidden="true">{result.type === 'win' ? '♛' : '½'}</div>
+        <h2 id="game-over-title">{result.title}</h2>
+        <p>{result.detail}</p>
+        <button className="primary-button game-over-action" onClick={onNewMatch}>Play again</button>
+      </div>
+    </div>
+  );
+}
 
 function TopBar({ onReset, onUndo, onOpenSettings, onOpenHowToPlay, undoCount, children }) {
   return (
@@ -263,6 +326,10 @@ function MoveHistoryPanel({ moveHistory }) {
 }
 
 function App() {
+  const { active: assetsLoading, progress: assetProgress, total: assetTotal } = useProgress();
+  const [assetsReady, setAssetsReady] = useState(false);
+  const [loaderStartedAt] = useState(() => Date.now());
+  const [loaderProgress, setLoaderProgress] = useState(0);
   const [game, setGame] = useState(() => new Chess());
   const [moveHistory, setMoveHistory] = useState([]);
   const [selectedSquare, setSelectedSquare] = useState(null);
@@ -278,8 +345,31 @@ function App() {
   const [promotionChoice, setPromotionChoice] = useState('q');
   const [hintVisible, setHintVisible] = useState(false);
 
+  useEffect(() => {
+    let animationFrame;
+    const updateLoaderProgress = () => {
+      const elapsed = Date.now() - loaderStartedAt;
+      setLoaderProgress(Math.min(100, (elapsed / 4000) * 100));
+      if (elapsed < 4000) animationFrame = window.requestAnimationFrame(updateLoaderProgress);
+    };
+    animationFrame = window.requestAnimationFrame(updateLoaderProgress);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [loaderStartedAt]);
+
+  useEffect(() => {
+    if (assetTotal === 0 || assetsLoading || assetProgress < 100) return undefined;
+    const remainingDisplayTime = Math.max(0, 4120 - (Date.now() - loaderStartedAt));
+    const revealTimer = window.setTimeout(() => setAssetsReady(true), remainingDisplayTime);
+    return () => window.clearTimeout(revealTimer);
+  }, [assetsLoading, assetProgress, assetTotal, loaderStartedAt]);
+
   const board = useMemo(() => game.board(), [game]);
   const palette = PALETTE_MAP[settings.palette] || PALETTE_MAP.classic;
+  useEffect(() => {
+    document.documentElement.style.setProperty('--theme-accent', palette.accent);
+    document.documentElement.style.setProperty('--theme-light', palette.white);
+    document.documentElement.style.setProperty('--theme-dark', palette.darkTile);
+  }, [palette]);
   const checkedKingSquare = useMemo(() => {
     if (!game.isCheck()) return null;
     for (let row = 0; row < board.length; row += 1) {
@@ -295,14 +385,45 @@ function App() {
   const capturedPieces = useMemo(() => moveHistory
     .filter((move) => move.captured)
     .map((move) => ({ type: move.captured, color: move.capturedColor })), [moveHistory]);
+  const gameResult = useMemo(() => {
+    if (game.isCheckmate()) {
+      const winner = game.turn() === 'w' ? 'Black' : 'White';
+      return { type: 'win', title: `${winner} wins!`, detail: 'The king has been checkmated.' };
+    }
+    if (game.isStalemate()) {
+      return { type: 'draw', title: 'Stalemate', detail: 'The player to move has no legal move and is not in check.' };
+    }
+    if (game.isInsufficientMaterial()) {
+      return { type: 'draw', title: 'Draw', detail: 'There is insufficient material to deliver checkmate.' };
+    }
+    if (game.isThreefoldRepetition()) {
+      return { type: 'draw', title: 'Draw', detail: 'The same position occurred three times.' };
+    }
+    if (game.isDrawByFiftyMoves()) {
+      return { type: 'draw', title: 'Draw', detail: 'Fifty moves passed without a pawn move or capture.' };
+    }
+    return null;
+  }, [game]);
 
   const updateStatus = (nextGame) => {
     if (nextGame.isCheckmate()) {
       setStatus(nextGame.turn() === 'w' ? 'Checkmate! Black wins' : 'Checkmate! White wins');
       return;
     }
-    if (nextGame.isDraw()) {
-      setStatus('Draw game');
+    if (nextGame.isStalemate()) {
+      setStatus('Draw by stalemate');
+      return;
+    }
+    if (nextGame.isInsufficientMaterial()) {
+      setStatus('Draw by insufficient material');
+      return;
+    }
+    if (nextGame.isThreefoldRepetition()) {
+      setStatus('Draw by repetition');
+      return;
+    }
+    if (nextGame.isDrawByFiftyMoves()) {
+      setStatus('Draw by fifty-move rule');
       return;
     }
     setStatus(`${nextGame.turn() === 'w' ? 'White' : 'Black'} to move`);
@@ -392,6 +513,7 @@ function App() {
   }, [game, gameMode, settings.aiDifficulty, settings.playerColor]);
 
   const handleSquareClick = (square) => {
+    if (game.isGameOver()) return;
     const piece = game.get(square);
 
     if (gameMode === 'ai' && game.turn() !== settings.playerColor) return;
@@ -421,6 +543,10 @@ function App() {
 
   const selectedMoves = selectedSquare ? legalMoves.map((move) => move.to) : [];
   const hintSquare = selectedSquare && selectedMoves.length ? selectedMoves[0] : null;
+
+  if (!assetsReady) {
+    return <AssetLoadingScreen progress={loaderProgress} />;
+  }
 
   return (
     <>
@@ -493,10 +619,15 @@ function App() {
                   )}
                 </>
               )}
+              {gameResult && <GameOverOverlay result={gameResult} onNewMatch={resetBoard} />}
             </div>
           </section>
 
         </main>
+        <footer className="creator-credit">
+          <span>Creator</span>
+          <strong>Soumya Pal</strong>
+        </footer>
       </div>
 
       {settingsOpen && (
