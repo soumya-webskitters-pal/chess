@@ -1,0 +1,11 @@
+Model Information:
+* title:	Classic Chess Bishop 3D Model
+* source:	https://sketchfab.com/3d-models/classic-chess-bishop-3d-model-846130cebb6d49fca063a2180791c72b
+* author:	LukeModels75 (https://sketchfab.com/lucasgamerbdf)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Classic Chess Bishop 3D Model" (https://sketchfab.com/3d-models/classic-chess-bishop-3d-model-846130cebb6d49fca063a2180791c72b) by LukeModels75 (https://sketchfab.com/lucasgamerbdf) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

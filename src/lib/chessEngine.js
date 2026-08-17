@@ -59,13 +59,13 @@ export const PALETTE_MAP = {
   classic: {
     white: "#f3f4f8",
     black: "#171d2e",
-    lightTile: "#edf3ff",
-    darkTile: "#23375d",
+    lightTile: "#f4f4f2",
+    darkTile: "#34383d",
     accent: "#69d2ff",
   },
   gold: {
-    white: "#fcd778",
-    black: "#6f4b11",
+    white: "#ffe29a",
+    black: "#604715",
     lightTile: "#f3e4a1",
     darkTile: "#604715",
     accent: "#ffd166",
@@ -196,12 +196,13 @@ function getMovePriority(move, difficulty = "easy") {
 export function getBestMove(game, depth = 3, difficulty = "easy") {
   const moves = game.moves({ verbose: true });
   if (!moves.length) return null;
+  const maximizing = game.turn() === "w";
 
   const orderedMoves = [...moves].sort(
     (a, b) => getMovePriority(b, difficulty) - getMovePriority(a, difficulty),
   );
 
-  let bestScore = -Infinity;
+  let bestScore = maximizing ? -Infinity : Infinity;
   let bestMove = orderedMoves[0];
 
   for (const move of orderedMoves) {
@@ -210,13 +211,13 @@ export function getBestMove(game, depth = 3, difficulty = "easy") {
     const score = minimax(
       next,
       depth - 1,
-      false,
+      !maximizing,
       -Infinity,
       Infinity,
       difficulty,
     );
 
-    if (score > bestScore) {
+    if ((maximizing && score > bestScore) || (!maximizing && score < bestScore)) {
       bestScore = score;
       bestMove = move;
     }

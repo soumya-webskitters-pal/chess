@@ -1,10 +1,60 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const paletteOptions = [
-  { value: 'classic', label: 'Black / White' },
-  { value: 'gold', label: 'Golden / Silver' },
-  { value: 'neon', label: 'Neon Green / Halogen Pink' },
+  { value: 'classic', label: 'Classic' },
+  { value: 'gold', label: 'Golden' },
+  { value: 'neon', label: 'Neon' },
 ];
+
+function CustomSelect({ value, options, onChange, ariaLabel }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event) => {
+      if (!containerRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, []);
+
+  return (
+    <div className={`custom-select${open ? ' is-open' : ''}`} ref={containerRef}>
+      <button
+        type="button"
+        className="custom-select-trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selected.label}</span>
+        <span className="select-chevron" aria-hidden="true">⌄</span>
+      </button>
+      {open && (
+        <div className="custom-select-menu" role="listbox" aria-label={ariaLabel}>
+          {options.map((option) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              className={`custom-select-option${option.value === value ? ' is-selected' : ''}`}
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              <span>{option.label}</span>
+              {option.value === value && <span aria-hidden="true">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SettingsDrawer({ settings, onChange, onClose }) {
   const modeLabel = useMemo(
@@ -16,57 +66,89 @@ export default function SettingsDrawer({ settings, onChange, onClose }) {
     <div className="settings-overlay" onClick={onClose}>
       <aside className="settings-drawer glass-panel" onClick={(event) => event.stopPropagation()}>
         <div className="panel-header">
-          <h3>Game Settings</h3>
+          <div>
+            <p className="drawer-eyebrow">Preferences</p>
+            <h3>Game Settings</h3>
+          </div>
           <button className="icon-button" onClick={onClose} aria-label="Close settings">✕</button>
         </div>
 
         <div className="settings-list">
-          <label>
+          <div className="setting-field">
             <span>Game mode</span>
-            <select value={settings.mode} onChange={(event) => onChange('mode', event.target.value)}>
-              <option value="ai">Vs AI</option>
-              <option value="local">Two Player</option>
-            </select>
-          </label>
+            <CustomSelect
+              value={settings.mode}
+              options={[{ value: 'ai', label: 'Vs AI' }, { value: 'local', label: 'Two Player' }]}
+              onChange={(value) => onChange('mode', value)}
+              ariaLabel="Game mode"
+            />
+          </div>
 
           {settings.mode === 'ai' && (
-            <label>
-              <span>AI difficulty</span>
-              <select value={settings.aiDifficulty || 'easy'} onChange={(event) => onChange('aiDifficulty', event.target.value)}>
-                <option value="easy">Easy</option>
-                <option value="hard">Hard</option>
-              </select>
-            </label>
+            <>
+              <div className="setting-field">
+                <span>Play as</span>
+                <CustomSelect
+                  value={settings.playerColor || 'w'}
+                  options={[{ value: 'w', label: 'White' }, { value: 'b', label: 'Black' }]}
+                  onChange={(value) => onChange('playerColor', value)}
+                  ariaLabel="Play as"
+                />
+              </div>
+
+              <div className="setting-field">
+                <span>AI difficulty</span>
+                <CustomSelect
+                  value={settings.aiDifficulty || 'easy'}
+                  options={[{ value: 'easy', label: 'Easy' }, { value: 'hard', label: 'Hard' }]}
+                  onChange={(value) => onChange('aiDifficulty', value)}
+                  ariaLabel="AI difficulty"
+                />
+              </div>
+            </>
           )}
 
           <label className="toggle-row">
             <span>Show hints</span>
-            <input type="checkbox" checked={settings.showHints} onChange={(event) => onChange('showHints', event.target.checked)} />
+            <span className="toggle-control">
+              <input type="checkbox" checked={settings.showHints} onChange={(event) => onChange('showHints', event.target.checked)} />
+              <span className="toggle-track" aria-hidden="true"><span className="toggle-thumb" /></span>
+            </span>
           </label>
 
           <label className="toggle-row">
             <span>Show possible moves</span>
-            <input type="checkbox" checked={settings.showPossibleMoves} onChange={(event) => onChange('showPossibleMoves', event.target.checked)} />
+            <span className="toggle-control">
+              <input type="checkbox" checked={settings.showPossibleMoves} onChange={(event) => onChange('showPossibleMoves', event.target.checked)} />
+              <span className="toggle-track" aria-hidden="true"><span className="toggle-thumb" /></span>
+            </span>
           </label>
 
           <label className="toggle-row">
             <span>Show grid numbers</span>
-            <input type="checkbox" checked={settings.showGridNumbers} onChange={(event) => onChange('showGridNumbers', event.target.checked)} />
+            <span className="toggle-control">
+              <input type="checkbox" checked={settings.showGridNumbers} onChange={(event) => onChange('showGridNumbers', event.target.checked)} />
+              <span className="toggle-track" aria-hidden="true"><span className="toggle-thumb" /></span>
+            </span>
           </label>
 
           <label className="toggle-row">
             <span>Can undo moves</span>
-            <input type="checkbox" checked={settings.enableUndo} onChange={(event) => onChange('enableUndo', event.target.checked)} />
+            <span className="toggle-control">
+              <input type="checkbox" checked={settings.enableUndo} onChange={(event) => onChange('enableUndo', event.target.checked)} />
+              <span className="toggle-track" aria-hidden="true"><span className="toggle-thumb" /></span>
+            </span>
           </label>
 
-          <label>
+          <div className="setting-field">
             <span>Piece colors</span>
-            <select value={settings.palette} onChange={(event) => onChange('palette', event.target.value)}>
-              {paletteOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+            <CustomSelect
+              value={settings.palette}
+              options={paletteOptions}
+              onChange={(value) => onChange('palette', value)}
+              ariaLabel="Piece colors"
+            />
+          </div>
 
           <div className="settings-summary">
             <span>Active</span>

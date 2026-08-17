@@ -1,0 +1,11 @@
+Model Information:
+* title:	Knight Chess
+* source:	https://sketchfab.com/3d-models/knight-chess-14b7927d8762480ab43916b59afc7882
+* author:	Matthew Ricupero (https://sketchfab.com/matthew.ricupero)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Knight Chess" (https://sketchfab.com/3d-models/knight-chess-14b7927d8762480ab43916b59afc7882) by Matthew Ricupero (https://sketchfab.com/matthew.ricupero) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
