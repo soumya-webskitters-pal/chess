@@ -1,9 +1,15 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
-import { useProgress } from '@react-three/drei';
-import ChessBoard3D, { PieceMoveDemo3D, RuleMoveDemo3D } from './components/ChessBoard3D';
+import ChessBoard3D, { loadPieceAssets } from './components/ChessBoard3D';
 import SettingsDrawer from './components/SettingsDrawer';
-import { getBestMove, getLegalMoves, PALETTE_MAP, PIECE_GLYPHS } from './lib/chessEngine';
+import AssetLoadingScreen from './components/ui/AssetLoadingScreen';
+import GameOverOverlay from './components/ui/GameOverOverlay';
+import HowToPlayModal from './components/ui/HowToPlayModal';
+import MatchPanel from './components/ui/MatchPanel';
+import MoveHistoryPanel from './components/ui/MoveHistoryPanel';
+import PromotionModal from './components/ui/PromotionModal';
+import TopBar from './components/ui/TopBar';
+import { getBestMove, getLegalMoves, learnPlayerStyle, PALETTE_MAP } from './lib/chessEngine';
 
 const defaultSettings = {
   mode: 'ai',
@@ -13,323 +19,16 @@ const defaultSettings = {
   showPossibleMoves: true,
   showGridNumbers: true,
   enableUndo: true,
+  highGraphics: false,
   palette: 'classic',
 };
 
-function AssetLoadingScreen({ progress }) {
-  const roundedProgress = Math.min(100, Math.max(0, Math.round(progress)));
-
-  return (
-    <div
-      className="asset-loader"
-      style={{
-        '--loader-poster-desktop': `url(${import.meta.env.BASE_URL}poster-desktop.png)`,
-        '--loader-poster-mobile': `url(${import.meta.env.BASE_URL}poster-mobile.png)`,
-      }}
-      role="status"
-      aria-live="polite"
-      aria-label={`Loading chess assets: ${roundedProgress}%`}
-    >
-      <div className="asset-loader-progress-wrap">
-        <div className="asset-loader-progress" aria-hidden="true">
-          <span style={{ width: `${roundedProgress}%` }} />
-        </div>
-        <strong className="asset-loader-value">{roundedProgress}%</strong>
-      </div>
-    </div>
-  );
-}
-
-const CONFETTI_PIECES = Array.from({ length: 42 }, (_, index) => ({
-  id: index,
-  left: (index * 37 + 9) % 100,
-  delay: ((index * 13) % 18) / 10,
-  duration: 2.4 + ((index * 7) % 14) / 10,
-  rotation: (index * 47) % 360,
-}));
-
-function GameOverOverlay({ result, onNewMatch }) {
-  return (
-    <div className="game-over-layer" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
-      {result.type === 'win' && (
-        <div className="confetti-field" aria-hidden="true">
-          {CONFETTI_PIECES.map((piece) => (
-            <i
-              key={piece.id}
-              style={{
-                '--confetti-left': `${piece.left}%`,
-                '--confetti-delay': `${piece.delay}s`,
-                '--confetti-duration': `${piece.duration}s`,
-                '--confetti-rotation': `${piece.rotation}deg`,
-                '--confetti-color': `hsl(${(piece.id * 53) % 360} 88% 65%)`,
-              }}
-            />
-          ))}
-        </div>
-      )}
-      <div className="game-over-card">
-        <span className="game-over-kicker">{result.type === 'win' ? 'Checkmate' : 'Game drawn'}</span>
-        <div className="game-over-emblem" aria-hidden="true">{result.type === 'win' ? '♛' : '½'}</div>
-        <h2 id="game-over-title">{result.title}</h2>
-        <p>{result.detail}</p>
-        <button className="primary-button game-over-action" onClick={onNewMatch}>Play again</button>
-      </div>
-    </div>
-  );
-}
-
-function TopBar({ onReset, onUndo, onOpenSettings, onOpenHowToPlay, undoCount, children }) {
-  return (
-    <header className="topbar glass-panel">
-      <div className="topbar-brand">
-        <p className="eyebrow">Quantum Board</p>
-        <div className="title-row">
-          <h1>Chess Arena</h1>
-          <button className="title-new-match" onClick={onReset}>New match</button>
-          <button className="how-to-button" onClick={onOpenHowToPlay}>How to play</button>
-        </div>
-      </div>
-
-      <div className="topbar-match">{children}</div>
-
-      <div className="topbar-actions">
-        <button className="ghost-button undo-button" onClick={onUndo} disabled={undoCount === 0}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 7 4 12l5 5M4 12h9a7 7 0 0 1 7 7" />
-          </svg>
-          <span>Undo ({undoCount})</span>
-        </button>
-        <button className="icon-button" aria-label="Open settings" onClick={onOpenSettings}>⚙</button>
-      </div>
-    </header>
-  );
-}
-
-const pieceGuides = [
-  { type: 'k', icon: '♔', name: 'King', detail: 'Moves one square in any direction. The king cannot move into check. Protect it at all times.' },
-  { type: 'q', icon: '♕', name: 'Queen', detail: 'Moves any number of squares horizontally, vertically, or diagonally. It cannot jump over pieces.' },
-  { type: 'r', icon: '♖', name: 'Rook', detail: 'Moves any number of squares horizontally or vertically. It also participates in castling.' },
-  { type: 'b', icon: '♗', name: 'Bishop', detail: 'Moves any number of squares diagonally. Each bishop stays on its starting square color.' },
-  { type: 'n', icon: '♘', name: 'Knight', detail: 'Moves in an L shape: two squares in one direction and one sideways. It can jump over pieces.' },
-  { type: 'p', icon: '♙', name: 'Pawn', detail: 'Moves forward one square, or two from its starting position. It captures one square diagonally forward.' },
-];
-
-const ruleGuides = [
-  { type: 'checkmate', name: 'Check and checkmate', detail: 'When your king is attacked, you must move it, block the attack, or capture the attacker. If none is possible, it is checkmate.' },
-  { type: 'castling', name: 'Castling', detail: 'Move the king two squares toward a rook; the rook crosses to the other side. Neither piece may have moved, and the king cannot castle through check.' },
-  { type: 'promotion', name: 'Pawn promotion', detail: 'A pawn reaching the opposite end becomes a queen in this game.' },
-  { type: 'enpassant', name: 'En passant', detail: 'A pawn may capture an adjacent pawn that just advanced two squares, as though it had moved only one. This is available immediately only.' },
-  { type: 'draws', name: 'Draws', detail: 'A game can draw by stalemate, insufficient material, threefold repetition, or the fifty-move rule.' },
-  { type: 'controls', name: 'Using this board', detail: 'Select one of your pieces to see legal destinations, then select a highlighted square. Use Undo when enabled, or switch between 3D and 2D views.' },
-];
-
-function HowToPlayModal({ onClose, palette }) {
-  const [selectedPiece, setSelectedPiece] = useState(pieceGuides[0]);
-  const [selectedRule, setSelectedRule] = useState(null);
-  const [guidePromotion, setGuidePromotion] = useState('q');
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [onClose]);
-
-  return (
-    <div className="how-to-overlay" onClick={onClose}>
-      <section className="how-to-modal" role="dialog" aria-modal="true" aria-labelledby="how-to-title" onClick={(event) => event.stopPropagation()}>
-        <header className="how-to-header">
-          <div>
-            <p className="drawer-eyebrow">Chess guide</p>
-            <h2 id="how-to-title">How to play</h2>
-          </div>
-          <button className="modal-close" onClick={onClose} aria-label="Close how to play">✕</button>
-        </header>
-
-        <div className="how-to-content">
-          <section className="guide-section">
-            <h3>Objective and turns</h3>
-            <p>White moves first, then players alternate turns. Move one piece per turn. Capture an opponent’s piece by moving onto its square. Win by checkmating the enemy king: attack it so there is no legal escape.</p>
-          </section>
-
-          <section className="guide-section">
-            <h3>How each piece moves</h3>
-            <div className="piece-guide-grid">
-              {pieceGuides.map((piece) => (
-                <Fragment key={piece.name}>
-                  <article
-                    className={`piece-guide-card${selectedPiece.type === piece.type ? ' is-active' : ''}`}
-                  >
-                    <button
-                      type="button"
-                      className="piece-guide-trigger"
-                      onClick={() => setSelectedPiece(piece)}
-                    >
-                      <span className="guide-piece-icon" aria-hidden="true">{piece.icon}</span>
-                      <div><h4>{piece.name}</h4><p>{piece.detail}</p></div>
-                    </button>
-                    {selectedPiece.type === piece.type && (
-                      <div className="piece-move-demo">
-                        <div className="piece-demo-heading">
-                          <div><span>3D movement guide</span><h4>{selectedPiece.name}</h4></div>
-                          <p>Green squares show the movement pattern. Drag to rotate and scroll to zoom.</p>
-                        </div>
-                        <PieceMoveDemo3D type={selectedPiece.type} palette={palette} />
-                      </div>
-                    )}
-                  </article>
-                </Fragment>
-              ))}
-            </div>
-          </section>
-
-          <section className="guide-section rule-grid">
-            {ruleGuides.map((rule) => (
-              <article className={`rule-guide-card${selectedRule === rule.type ? ' is-active' : ''}`} key={rule.type}>
-                <button type="button" className="rule-guide-trigger" onClick={() => setSelectedRule(rule.type)}>
-                  <h4>{rule.name}</h4><p>{rule.detail}</p>
-                </button>
-                {selectedRule === rule.type && (
-                  <div className="piece-move-demo rule-move-demo">
-                    <div className="piece-demo-heading"><div><span>3D rule simulation</span><h4>{rule.name}</h4></div></div>
-                    {rule.type === 'promotion' && (
-                      <div className="guide-promotion-picker">
-                        <span>Choose promotion</span>
-                        <div>
-                          {promotionOptions.map((option) => (
-                            <button
-                              type="button"
-                              className={guidePromotion === option.type ? 'is-selected' : ''}
-                              key={option.type}
-                              onClick={() => setGuidePromotion(option.type)}
-                            >
-                              <b>{PIECE_GLYPHS.w[option.type]}</b>
-                              <small>{option.label}</small>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <RuleMoveDemo3D rule={rule.type} palette={palette} promotionType={guidePromotion} />
-                  </div>
-                )}
-              </article>
-            ))}
-          </section>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-const promotionOptions = [
-  { type: 'q', label: 'Queen' },
-  { type: 'r', label: 'Rook' },
-  { type: 'b', label: 'Bishop' },
-  { type: 'n', label: 'Knight' },
-];
-
-function PromotionModal({ color, selected, onSelect, onConfirm, onCancel }) {
-  return (
-    <div className="promotion-overlay" onClick={onCancel}>
-      <section className="promotion-modal" role="dialog" aria-modal="true" aria-labelledby="promotion-title" onClick={(event) => event.stopPropagation()}>
-        <p className="drawer-eyebrow">Pawn promotion</p>
-        <h2 id="promotion-title">Choose a piece</h2>
-        <p className="promotion-help">Your pawn reached the final rank. Queen is selected by default.</p>
-        <div className="promotion-options">
-          {promotionOptions.map((option) => (
-            <button
-              type="button"
-              className={`promotion-option${selected === option.type ? ' is-selected' : ''}`}
-              key={option.type}
-              onClick={() => onSelect(option.type)}
-              aria-pressed={selected === option.type}
-            >
-              <span>{PIECE_GLYPHS[color][option.type]}</span>
-              <strong>{option.label}</strong>
-              {selected === option.type && <small>Selected</small>}
-            </button>
-          ))}
-        </div>
-        <div className="promotion-actions">
-          <button className="secondary-button" onClick={onCancel}>Cancel</button>
-          <button className="primary-button" onClick={onConfirm}>Promote</button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function MatchPanel({ status, mode, playerColor, hintsOn, historyLength, paletteName, aiDifficulty }) {
-  return (
-    <section className="match-panel-top">
-      <div className="status-row">
-        <span className="status-label">State</span>
-        <strong>{status}</strong>
-      </div>
-
-      <div className="meta-grid">
-        <div>
-          <span>Mode</span>
-          <strong>{mode === 'ai' ? 'AI' : 'Local'}</strong>
-        </div>
-        <div>
-          <span>AI</span>
-          <strong>{mode === 'ai' ? aiDifficulty : 'N/A'}</strong>
-        </div>
-        <div>
-          <span>Your side</span>
-          <strong>{mode === 'ai' ? (playerColor === 'w' ? 'White' : 'Black') : 'Both'}</strong>
-        </div>
-        <div>
-          <span>Hints</span>
-          <strong>{hintsOn ? 'On' : 'Off'}</strong>
-        </div>
-        <div>
-          <span>Moves</span>
-          <strong>{historyLength}</strong>
-        </div>
-        <div>
-          <span>Colors</span>
-          <strong>{paletteName}</strong>
-        </div>
-      </div>
-
-    </section>
-  );
-}
-
-function MoveHistoryPanel({ moveHistory }) {
-  return (
-    <aside className="move-history-panel glass-panel">
-      <div className="move-log">
-        <div className="move-log-header">
-          <h4>Move History</h4>
-          <span>{moveHistory.length}</span>
-        </div>
-        <div className="move-log-list">
-          {moveHistory.length === 0 ? (
-            <p className="move-log-empty">No moves yet</p>
-          ) : moveHistory.map((move, index) => (
-            <div className="move-log-item" key={`${move.from}-${move.to}-${index}`}>
-              <span className="move-index">{index + 1}</span>
-              <strong>{move.from} <span>to</span> {move.to}</strong>
-              <span className={`move-side ${move.color === 'w' ? 'is-white' : 'is-black'}`}>
-                {move.color === 'w' ? 'White' : 'Black'}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </aside>
-  );
-}
-
 function App() {
-  const { active: assetsLoading, progress: assetProgress, total: assetTotal } = useProgress();
   const [assetsReady, setAssetsReady] = useState(false);
   const [loaderStartedAt] = useState(() => Date.now());
   const [loaderProgress, setLoaderProgress] = useState(0);
+  const [modelProgress, setModelProgress] = useState(0);
+  const [modelsReady, setModelsReady] = useState(false);
   const [game, setGame] = useState(() => new Chess());
   const [moveHistory, setMoveHistory] = useState([]);
   const [selectedSquare, setSelectedSquare] = useState(null);
@@ -344,6 +43,16 @@ function App() {
   const [pendingPromotion, setPendingPromotion] = useState(null);
   const [promotionChoice, setPromotionChoice] = useState('q');
   const [hintVisible, setHintVisible] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [matchInfoExpanded, setMatchInfoExpanded] = useState(true);
+  const appShellRef = useRef(null);
+
+  useEffect(() => {
+    const updateFullscreenState = () => setIsFullscreen(document.fullscreenElement === appShellRef.current);
+    document.addEventListener('fullscreenchange', updateFullscreenState);
+    return () => document.removeEventListener('fullscreenchange', updateFullscreenState);
+  }, []);
 
   useEffect(() => {
     let animationFrame;
@@ -357,11 +66,25 @@ function App() {
   }, [loaderStartedAt]);
 
   useEffect(() => {
-    if (assetTotal === 0 || assetsLoading || assetProgress < 100) return undefined;
-    const remainingDisplayTime = Math.max(0, 4120 - (Date.now() - loaderStartedAt));
-    const revealTimer = window.setTimeout(() => setAssetsReady(true), remainingDisplayTime);
+    let active = true;
+    loadPieceAssets((progress) => {
+      if (active) setModelProgress(progress);
+    }).then(() => {
+      if (active) {
+        setModelProgress(100);
+        setModelsReady(true);
+      }
+    }).catch((error) => {
+      console.error('Unable to load chess piece models', error);
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!modelsReady || loaderProgress < 100) return undefined;
+    const revealTimer = window.setTimeout(() => setAssetsReady(true), 120);
     return () => window.clearTimeout(revealTimer);
-  }, [assetsLoading, assetProgress, assetTotal, loaderStartedAt]);
+  }, [loaderProgress, modelsReady]);
 
   const board = useMemo(() => game.board(), [game]);
   const palette = PALETTE_MAP[settings.palette] || PALETTE_MAP.classic;
@@ -454,10 +177,14 @@ function App() {
       captured: move.captured || null,
       capturedColor: move.captured ? (move.color === 'w' ? 'b' : 'w') : null,
       color: move.color,
+      piece: move.piece,
+      san: move.san,
+      flags: move.flags,
       promotion: move.promotion || null,
     }]);
     setSelectedSquare(null);
     setLegalMoves([]);
+    setHintVisible(false);
     setUndoRemaining(3);
     updateStatus(nextGame);
     return true;
@@ -485,12 +212,17 @@ function App() {
     setGameMode(settings.mode);
   }, [settings.mode]);
 
+  const learnedPlayerStyle = useMemo(
+    () => learnPlayerStyle(moveHistory, settings.playerColor),
+    [moveHistory, settings.playerColor],
+  );
+
   useEffect(() => {
     if (gameMode === 'ai' && game.turn() !== settings.playerColor && !game.isGameOver()) {
       const timer = setTimeout(() => {
         const difficulty = settings.aiDifficulty || 'easy';
         const depth = difficulty === 'hard' ? 3 : 1;
-        const nextMove = getBestMove(game, depth, difficulty);
+        const nextMove = getBestMove(game, depth, difficulty, learnedPlayerStyle);
         if (!nextMove) return;
 
         const nextGame = new Chess(game.fen());
@@ -502,6 +234,9 @@ function App() {
           captured: move.captured || null,
           capturedColor: move.captured ? (move.color === 'w' ? 'b' : 'w') : null,
           color: move.color,
+          piece: move.piece,
+          san: move.san,
+          flags: move.flags,
         }]);
         setSelectedSquare(null);
         setLegalMoves([]);
@@ -510,7 +245,7 @@ function App() {
 
       return () => clearTimeout(timer);
     }
-  }, [game, gameMode, settings.aiDifficulty, settings.playerColor]);
+  }, [game, gameMode, learnedPlayerStyle, settings.aiDifficulty, settings.playerColor]);
 
   const handleSquareClick = (square) => {
     if (game.isGameOver()) return;
@@ -543,14 +278,36 @@ function App() {
 
   const selectedMoves = selectedSquare ? legalMoves.map((move) => move.to) : [];
   const hintSquare = selectedSquare && selectedMoves.length ? selectedMoves[0] : null;
+  const suggestedMove = useMemo(() => {
+    if (!settings.showHints || game.isGameOver()) return null;
+    if (gameMode === 'ai' && game.turn() !== settings.playerColor) return null;
+    return getBestMove(game, 2, 'hard');
+  }, [game, gameMode, settings.playerColor, settings.showHints]);
+  const hintedFrom = !selectedSquare && hintVisible ? suggestedMove?.from : null;
+  const boardSelectedSquare = selectedSquare || hintedFrom;
+  const boardLegalMoves = selectedSquare
+    ? legalMoves
+    : (hintVisible && suggestedMove ? [{ to: suggestedMove.to }] : []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await appShellRef.current?.requestFullscreen();
+      }
+    } catch (error) {
+      console.error('Fullscreen mode is unavailable', error);
+    }
+  };
 
   if (!assetsReady) {
-    return <AssetLoadingScreen progress={loaderProgress} />;
+    return <AssetLoadingScreen progress={Math.min(loaderProgress, modelProgress)} />;
   }
 
   return (
     <>
-      <div className="app-shell">
+      <div className="app-shell" ref={appShellRef}>
         <div className="nebula nebula-1" />
         <div className="nebula nebula-2" />
 
@@ -560,6 +317,8 @@ function App() {
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenHowToPlay={() => setHowToPlayOpen(true)}
           undoCount={undoRemaining}
+          infoExpanded={matchInfoExpanded}
+          onToggleInfo={() => setMatchInfoExpanded((expanded) => !expanded)}
         >
           <MatchPanel
             status={status}
@@ -573,15 +332,21 @@ function App() {
         </TopBar>
 
         <main className="game-layout">
-          <div className="game-sidebar">
-            <MoveHistoryPanel moveHistory={moveHistory} />
+          <button
+            className={`history-backdrop${historyOpen ? ' is-visible' : ''}`}
+            onClick={() => setHistoryOpen(false)}
+            aria-label="Close move history"
+            tabIndex={historyOpen ? 0 : -1}
+          />
+          <div className={`game-sidebar${historyOpen ? ' is-open' : ''}`} aria-hidden={!historyOpen}>
+            <MoveHistoryPanel moveHistory={moveHistory} onClose={() => setHistoryOpen(false)} />
           </div>
           <section className="board-panel glass-panel">
             <div className="board-frame">
               <ChessBoard3D
                 board={board}
-                selectedSquare={selectedSquare}
-                legalMoves={legalMoves}
+                selectedSquare={boardSelectedSquare}
+                legalMoves={boardLegalMoves}
                 onSquareClick={handleSquareClick}
                 palette={palette}
                 showGrid={settings.showGridNumbers}
@@ -590,6 +355,8 @@ function App() {
                 capturedPieces={capturedPieces}
                 topView={topView}
                 checkedKingSquare={checkedKingSquare}
+                highGraphics={settings.highGraphics}
+                graphicsTheme={settings.palette}
               />
               <button
                 className="view-toggle-button"
@@ -597,6 +364,30 @@ function App() {
                 aria-pressed={topView}
               >
                 {topView ? '3D View' : '2D View'}
+              </button>
+              <button
+                className="fullscreen-toggle-button"
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                aria-pressed={isFullscreen}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  {isFullscreen
+                    ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+                    : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
+                </svg>
+              </button>
+              <button
+                className="history-toggle-button"
+                onClick={() => setHistoryOpen(true)}
+                aria-label="Open move history"
+                aria-expanded={historyOpen}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 6h16M4 12h16M4 18h10" />
+                </svg>
+                <span>Moves</span>
+                <strong>{moveHistory.length}</strong>
               </button>
               {settings.showHints && (
                 <>
@@ -614,7 +405,9 @@ function App() {
                     <div className="hint-badge">
                       {selectedSquare && hintSquare
                         ? `Hint: ${selectedSquare} to ${hintSquare}`
-                        : 'Select a piece to see a hint'}
+                        : suggestedMove
+                          ? `Best move: ${suggestedMove.from} to ${suggestedMove.to}`
+                          : 'No hint available'}
                     </div>
                   )}
                 </>
@@ -633,6 +426,21 @@ function App() {
       {settingsOpen && (
         <SettingsDrawer
           settings={{ ...settings, mode: gameMode }}
+          topView={topView}
+          isFullscreen={isFullscreen}
+          onNewGame={() => {
+            resetBoard();
+            setSettingsOpen(false);
+          }}
+          onToggleView={() => setTopView((current) => !current)}
+          onToggleFullscreen={() => {
+            setSettingsOpen(false);
+            toggleFullscreen();
+          }}
+          onOpenHowToPlay={() => {
+            setSettingsOpen(false);
+            setHowToPlayOpen(true);
+          }}
           onChange={(key, value) => {
             if (key === 'mode') {
               setGameMode(value);

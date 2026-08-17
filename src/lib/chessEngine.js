@@ -193,7 +193,31 @@ function getMovePriority(move, difficulty = "easy") {
   return score;
 }
 
-export function getBestMove(game, depth = 3, difficulty = "easy") {
+export function learnPlayerStyle(history, playerColor) {
+  const moves = history.filter((move) => move.color === playerColor);
+  if (!moves.length) return null;
+  const ratio = (predicate) => moves.filter(predicate).length / moves.length;
+  return {
+    capture: ratio((move) => Boolean(move.captured)),
+    check: ratio((move) => move.san?.includes("+") || move.san?.includes("#")),
+    pawn: ratio((move) => move.piece === "p"),
+    castle: ratio((move) => move.flags?.includes("k") || move.flags?.includes("q")),
+    center: ratio((move) => ["c3", "c4", "c5", "c6", "d3", "d4", "d5", "d6", "e3", "e4", "e5", "e6", "f3", "f4", "f5", "f6"].includes(move.to)),
+  };
+}
+
+function getStyleAffinity(move, style) {
+  if (!style) return 0;
+  let score = 0;
+  if (move.captured) score += 85 * style.capture;
+  if (move.san.includes("+") || move.san.includes("#")) score += 75 * style.check;
+  if (move.piece === "p") score += 32 * style.pawn;
+  if (move.flags.includes("k") || move.flags.includes("q")) score += 90 * style.castle;
+  if (["c3", "c4", "c5", "c6", "d3", "d4", "d5", "d6", "e3", "e4", "e5", "e6", "f3", "f4", "f5", "f6"].includes(move.to)) score += 38 * style.center;
+  return score;
+}
+
+export function getBestMove(game, depth = 3, difficulty = "easy", playerStyle = null) {
   const moves = game.moves({ verbose: true });
   if (!moves.length) return null;
   const maximizing = game.turn() === "w";
@@ -208,7 +232,7 @@ export function getBestMove(game, depth = 3, difficulty = "easy") {
   for (const move of orderedMoves) {
     const next = cloneGame(game);
     next.move({ from: move.from, to: move.to, promotion: "q" });
-    const score = minimax(
+    const strategicScore = minimax(
       next,
       depth - 1,
       !maximizing,
@@ -216,6 +240,8 @@ export function getBestMove(game, depth = 3, difficulty = "easy") {
       Infinity,
       difficulty,
     );
+    const styleAffinity = getStyleAffinity(move, playerStyle);
+    const score = strategicScore + (maximizing ? styleAffinity : -styleAffinity);
 
     if ((maximizing && score > bestScore) || (!maximizing && score < bestScore)) {
       bestScore = score;

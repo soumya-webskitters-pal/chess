@@ -56,7 +56,17 @@ function CustomSelect({ value, options, onChange, ariaLabel }) {
   );
 }
 
-export default function SettingsDrawer({ settings, onChange, onClose }) {
+export default function SettingsDrawer({
+  settings,
+  onChange,
+  onClose,
+  topView,
+  isFullscreen,
+  onNewGame,
+  onToggleView,
+  onToggleFullscreen,
+  onOpenHowToPlay,
+}) {
   const modeLabel = useMemo(
     () => (settings.mode === 'ai' ? 'VS AI' : 'Two Player'),
     [settings.mode],
@@ -74,6 +84,20 @@ export default function SettingsDrawer({ settings, onChange, onClose }) {
         </div>
 
         <div className="settings-list">
+          <section className="settings-actions-section">
+            <span className="settings-section-label">Game actions</span>
+            <div className="settings-action-grid">
+              <button type="button" onClick={onNewGame}><span aria-hidden="true">↻</span><strong>New game</strong></button>
+              <button type="button" onClick={onOpenHowToPlay}><span aria-hidden="true">?</span><strong>How to play</strong></button>
+              <button type="button" className={topView ? 'is-active' : ''} onClick={onToggleView}>
+                <span aria-hidden="true">▦</span><strong>{topView ? '3D mode' : '2D mode'}</strong>
+              </button>
+              <button type="button" className={isFullscreen ? 'is-active' : ''} onClick={onToggleFullscreen}>
+                <span aria-hidden="true">{isFullscreen ? '↙' : '↗'}</span><strong>{isFullscreen ? 'Exit fullscreen' : 'Go fullscreen'}</strong>
+              </button>
+            </div>
+          </section>
+
           <div className="setting-field">
             <span>Game mode</span>
             <CustomSelect
@@ -136,6 +160,17 @@ export default function SettingsDrawer({ settings, onChange, onClose }) {
             <span>Can undo moves</span>
             <span className="toggle-control">
               <input type="checkbox" checked={settings.enableUndo} onChange={(event) => onChange('enableUndo', event.target.checked)} />
+              <span className="toggle-track" aria-hidden="true"><span className="toggle-thumb" /></span>
+            </span>
+          </label>
+
+          <label className="toggle-row graphics-toggle-row">
+            <span>
+              High graphics
+              <small>HDR studio lighting and reflections</small>
+            </span>
+            <span className="toggle-control">
+              <input type="checkbox" checked={settings.highGraphics} onChange={(event) => onChange('highGraphics', event.target.checked)} />
               <span className="toggle-track" aria-hidden="true"><span className="toggle-thumb" /></span>
             </span>
           </label>

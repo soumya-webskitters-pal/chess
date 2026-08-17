@@ -1,8 +1,63 @@
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, OrthographicCamera, useGLTF } from '@react-three/drei';
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { Environment, Lightformer, OrbitControls, OrthographicCamera } from '@react-three/drei';
+import { createContext, Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FILES, PIECE_GLYPHS } from '../lib/chessEngine';
+
+const GraphicsContext = createContext(false);
+
+const HDR_THEMES = {
+  classic: {
+    low: '#080a0f', high: '#4b515a', glow: '#d9e2ef',
+    key: '#ffffff', left: '#ffd9ad', right: '#b9d7ff', ring: '#ffffff',
+  },
+  gold: {
+    low: '#120800', high: '#6d3305', glow: '#ffb51f',
+    key: '#fff0bd', left: '#ffb52e', right: '#ffe29a', ring: '#ffc95c',
+  },
+  neon: {
+    low: '#10001d', high: '#5a063f', glow: '#ff1aa8',
+    key: '#ff79d1', left: '#ff2da8', right: '#19f6ff', ring: '#8f5cff',
+  },
+};
+
+function PremiumBackdrop({ theme }) {
+  const colors = HDR_THEMES[theme] || HDR_THEMES.classic;
+  const uniforms = useMemo(() => ({
+    uLow: { value: new THREE.Color(colors.low) },
+    uHigh: { value: new THREE.Color(colors.high) },
+    uGlow: { value: new THREE.Color(colors.glow) },
+  }), [colors]);
+
+  return (
+    <mesh scale={45}>
+      <sphereGeometry args={[1, 40, 24]} />
+      <shaderMaterial
+        side={THREE.BackSide}
+        depthWrite={false}
+        uniforms={uniforms}
+        vertexShader="varying vec3 vPosition; void main(){ vPosition = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }"
+        fragmentShader="uniform vec3 uLow; uniform vec3 uHigh; uniform vec3 uGlow; varying vec3 vPosition; void main(){ vec3 n = normalize(vPosition); float h = n.y * .5 + .5; float glow = pow(max(0.0, 1.0 - abs(n.x)), 7.0); gl_FragColor = vec4(mix(uLow, uHigh, h * .72) + uGlow * glow * .28, 1.0); }"
+      />
+    </mesh>
+  );
+}
+
+function StudioEnvironment({ theme }) {
+  const colors = HDR_THEMES[theme] || HDR_THEMES.classic;
+  return (
+    <>
+      <PremiumBackdrop theme={theme} />
+      <Environment key={theme} resolution={256}>
+        <Lightformer form="rect" intensity={5} color={colors.key} position={[0, 8, -7]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 10, 1]} />
+        <Lightformer form="rect" intensity={4} color={colors.left} position={[-7, 3, 1]} rotation={[0, Math.PI / 2, 0]} scale={[3, 8, 1]} />
+        <Lightformer form="rect" intensity={3.5} color={colors.right} position={[7, 2, 2]} rotation={[0, -Math.PI / 2, 0]} scale={[3, 7, 1]} />
+        <Lightformer form="ring" intensity={2.5} color={colors.ring} position={[0, 1, 7]} scale={[5, 5, 1]} />
+      </Environment>
+    </>
+  );
+}
 
 function GridSprite({ text, position }) {
   const texture = useMemo(() => {
@@ -88,15 +143,16 @@ function PieceSprite({ piece, palette, onClick }) {
 }
 
 function BoardModel() {
+  const highGraphics = useContext(GraphicsContext);
   return (
     <group>
       <mesh receiveShadow>
         <boxGeometry args={[8.8, 0.34, 8.8]} />
-        <meshStandardMaterial color="#080b10" metalness={0.72} roughness={0.22} />
+        <meshPhysicalMaterial color="#080b10" metalness={0.84} roughness={highGraphics ? 0.1 : 0.22} clearcoat={highGraphics ? 1 : 0.35} clearcoatRoughness={0.08} envMapIntensity={highGraphics ? 2.5 : 1} />
       </mesh>
       <mesh position={[0, 0.2, 0]} receiveShadow>
         <boxGeometry args={[8.28, 0.16, 8.28]} />
-        <meshStandardMaterial color="#202832" metalness={0.6} roughness={0.26} />
+        <meshPhysicalMaterial color="#202832" metalness={0.72} roughness={highGraphics ? 0.12 : 0.26} clearcoat={highGraphics ? 0.9 : 0.25} envMapIntensity={highGraphics ? 2.2 : 1} />
       </mesh>
     </group>
   );
@@ -112,10 +168,46 @@ const PIECE_MODELS = {
   k: `${MODEL_ROOT}king/scene.gltf`,
 };
 
+const loadedPieceModels = new Map();
+let pieceAssetPromise;
+
+export function loadPieceAssets(onProgress = () => {}) {
+  if (loadedPieceModels.size === Object.keys(PIECE_MODELS).length) {
+    onProgress(100);
+    return Promise.resolve();
+  }
+  if (pieceAssetPromise) return pieceAssetPromise;
+
+  const loader = new GLTFLoader();
+  const entries = Object.entries(PIECE_MODELS);
+  let completed = 0;
+  pieceAssetPromise = Promise.all(entries.map(async ([type, path]) => {
+    let timeoutId;
+    try {
+      const timeout = new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error(`Timed out loading ${type}`)), 8000);
+      });
+      const gltf = await Promise.race([loader.loadAsync(path), timeout]);
+      loadedPieceModels.set(type, gltf);
+    } catch (error) {
+      console.error(`Unable to load chess model: ${type}`, error);
+    } finally {
+      window.clearTimeout(timeoutId);
+      completed += 1;
+      onProgress((completed / entries.length) * 100);
+    }
+  }));
+  return pieceAssetPromise;
+}
+
 const PIECE_HEIGHTS = { p: 0.88, r: 1.05, n: 1.12, b: 1.18, q: 1.3, k: 1.38 };
 
 function ChessPieceModel({ type, color, palette, selected, moveOffset = { x: 0, z: 0 }, onClick }) {
-  const { scene } = useGLTF(PIECE_MODELS[type]);
+  const highGraphics = useContext(GraphicsContext);
+  const scene = loadedPieceModels.get(type)?.scene;
+  if (!scene) {
+    return <PieceSprite piece={{ type, color }} palette={palette} onClick={onClick} />;
+  }
   const pieceColor = color === 'w' ? palette.white : palette.black;
   const animatedGroup = useRef();
 
@@ -139,18 +231,18 @@ function ChessPieceModel({ type, color, palette, selected, moveOffset = { x: 0, 
     color: pieceColor,
     emissive: pieceColor,
     emissiveIntensity: color === 'w' ? 0.14 : 0.05,
-    metalness: color === 'w' ? 0.62 : 0.88,
-    roughness: 0.09,
+    metalness: highGraphics ? (color === 'w' ? 0.74 : 0.94) : (color === 'w' ? 0.62 : 0.88),
+    roughness: highGraphics ? 0.035 : 0.09,
     clearcoat: 1,
-    clearcoatRoughness: 0.06,
-    envMapIntensity: 1.8,
+    clearcoatRoughness: highGraphics ? 0.018 : 0.06,
+    envMapIntensity: highGraphics ? 3.6 : 1.8,
     transparent: false,
     opacity: 1,
     transmission: 0,
     depthWrite: true,
     depthTest: true,
     alphaTest: 0,
-  }), [color, pieceColor]);
+  }), [color, highGraphics, pieceColor]);
 
   useLayoutEffect(() => {
     model.traverse((child) => {
@@ -193,8 +285,6 @@ function ChessPieceModel({ type, color, palette, selected, moveOffset = { x: 0, 
     </group>
   );
 }
-
-Object.values(PIECE_MODELS).forEach((path) => useGLTF.preload(path));
 
 const DEMO_MOVES = {
   k: [-1, 0, 1].flatMap((x) => [-1, 0, 1].map((z) => [x, z])).filter(([x, z]) => x || z),
@@ -532,7 +622,7 @@ function BoardTile({ x, z, isDark, selected, moveTarget, kingInCheck, piece, mov
   );
 }
 
-export default function ChessBoard3D({ board, selectedSquare, legalMoves, onSquareClick, palette, showGrid, showPossibleMoves, playerColor, capturedPieces, topView, checkedKingSquare }) {
+export default function ChessBoard3D({ board, selectedSquare, legalMoves, onSquareClick, palette, showGrid, showPossibleMoves, playerColor, capturedPieces, topView, checkedKingSquare, highGraphics = false, graphicsTheme = 'classic' }) {
   const previousBoard = useRef(board);
   const boardMatrix = useMemo(() => {
     return board.flatMap((row, rowIndex) =>
@@ -590,7 +680,16 @@ export default function ChessBoard3D({ board, selectedSquare, legalMoves, onSqua
         key={topView ? 'top-view' : 'perspective-view'}
         camera={{ position: [0, 9, 10.5], fov: 48 }}
         shadows
+        dpr={highGraphics ? [1, 2] : [1, 1.35]}
+        gl={{ antialias: true, powerPreference: highGraphics ? 'high-performance' : 'default' }}
+        onCreated={({ gl }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = highGraphics ? 1.18 : 1;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        }}
       >
+        <GraphicsContext.Provider value={highGraphics}>
+        {highGraphics ? <StudioEnvironment theme={graphicsTheme} /> : <color attach="background" args={["#080b12"]} />}
         {topView && (
           <OrthographicCamera
             makeDefault
@@ -609,6 +708,12 @@ export default function ChessBoard3D({ board, selectedSquare, legalMoves, onSqua
           shadow-bias={-0.0004}
           shadow-normalBias={0.025}
         />
+        {highGraphics && (
+          <>
+            <spotLight position={[-6, 7, 3]} intensity={75} angle={0.42} penumbra={0.8} color={(HDR_THEMES[graphicsTheme] || HDR_THEMES.classic).left} castShadow />
+            <spotLight position={[6, 5, -3]} intensity={58} angle={0.5} penumbra={0.9} color={(HDR_THEMES[graphicsTheme] || HDR_THEMES.classic).right} />
+          </>
+        )}
         <group rotation={[
           0,
           topView
@@ -659,6 +764,7 @@ export default function ChessBoard3D({ board, selectedSquare, legalMoves, onSqua
             maxPolarAngle={Math.PI / 2.2}
           />
         )}
+        </GraphicsContext.Provider>
       </Canvas>
     </div>
   );
