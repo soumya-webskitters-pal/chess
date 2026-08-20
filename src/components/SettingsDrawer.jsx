@@ -68,7 +68,7 @@ export default function SettingsDrawer({
   onOpenHowToPlay,
 }) {
   const modeLabel = useMemo(
-    () => (settings.mode === 'ai' ? 'VS AI' : 'Two Player'),
+    () => (settings.mode === 'ai' ? 'VS AI' : settings.mode === 'online' ? 'Online' : 'Two Player'),
     [settings.mode],
   );
 
@@ -102,7 +102,7 @@ export default function SettingsDrawer({
             <span>Game mode</span>
             <CustomSelect
               value={settings.mode}
-              options={[{ value: 'ai', label: 'Vs AI' }, { value: 'local', label: 'Two Player' }]}
+              options={[{ value: 'ai', label: 'Vs AI' }, { value: 'online', label: 'Play Online' }, { value: 'local', label: 'Two Player' }]}
               onChange={(value) => onChange('mode', value)}
               ariaLabel="Game mode"
             />

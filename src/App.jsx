@@ -9,7 +9,12 @@ import MatchPanel from './components/ui/MatchPanel';
 import MoveHistoryPanel from './components/ui/MoveHistoryPanel';
 import PromotionModal from './components/ui/PromotionModal';
 import TopBar from './components/ui/TopBar';
+import OnlineLobby from './components/ui/OnlineLobby';
+import OnlineSocial from './components/ui/OnlineSocial';
+import AppFooter from './components/ui/AppFooter';
+import LegalModal from './components/ui/LegalModal';
 import { getBestMove, getLegalMoves, learnPlayerStyle, PALETTE_MAP } from './lib/chessEngine';
+import useOnlineChess from './hooks/useOnlineChess';
 
 const defaultSettings = {
   mode: 'ai',
@@ -45,8 +50,28 @@ function App() {
   const [hintVisible, setHintVisible] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [matchInfoExpanded, setMatchInfoExpanded] = useState(true);
+  const [matchInfoExpanded, setMatchInfoExpanded] = useState(false);
+  const [onlineLobbyOpen, setOnlineLobbyOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [reaction, setReaction] = useState(null);
+  const [legalOpen, setLegalOpen] = useState(null);
+  const [matchHistory, setMatchHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('quantum-chess-history')) || []; } catch { return []; }
+  });
+  const recordedResultRef = useRef(false);
   const appShellRef = useRef(null);
+  const online = useOnlineChess();
+
+  useEffect(() => { localStorage.setItem('quantum-chess-history', JSON.stringify(matchHistory)); }, [matchHistory]);
+
+  useEffect(() => {
+    const room = new URLSearchParams(window.location.search).get('room');
+    if (!room) return;
+    setGameMode('online');
+    setSettings((prev) => ({ ...prev, mode: 'online' }));
+    setOnlineLobbyOpen(true);
+    online.join(room);
+  }, [online.join]);
 
   useEffect(() => {
     const updateFullscreenState = () => setIsFullscreen(document.fullscreenElement === appShellRef.current);
@@ -163,9 +188,15 @@ function App() {
     setPendingPromotion(null);
     setPromotionChoice('q');
     setHintVisible(false);
+    recordedResultRef.current = false;
   };
 
-  const applyMove = ({ from, to, promotion = 'q' }) => {
+  const resetCurrentGame = () => {
+    resetBoard();
+    if (gameMode === 'online' && online.status === 'playing') online.send({ type: 'reset' });
+  };
+
+  const applyMove = ({ from, to, promotion = 'q' }, broadcast = true) => {
     const nextGame = new Chess(game.fen());
     const move = nextGame.move({ from, to, promotion });
     if (!move) return false;
@@ -187,11 +218,45 @@ function App() {
     setHintVisible(false);
     setUndoRemaining(3);
     updateStatus(nextGame);
+    if (broadcast && gameMode === 'online') online.send({ type: 'move', from, to, promotion });
     return true;
   };
 
+  useEffect(() => {
+    const data = online.event;
+    if (!data) return;
+    if (data.type === 'connected') {
+      setGameMode('online');
+      setSettings((prev) => ({ ...prev, mode: 'online' }));
+      resetBoard();
+      setChatMessages([]);
+      setOnlineLobbyOpen(false);
+    } else if (data.type === 'move') {
+      const remoteColor = online.playerColor === 'w' ? 'b' : 'w';
+      if (game.get(data.from)?.color === remoteColor) applyMove({ from: data.from, to: data.to, promotion: data.promotion || 'q' }, false);
+    } else if (data.type === 'chat' && typeof data.text === 'string') {
+      const text = data.text.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 80);
+      if (text) setChatMessages((items) => [...items, { id: data.eventId, text, mine: false }].slice(-60));
+    } else if (data.type === 'reaction' && typeof data.emoji === 'string') {
+      setReaction({ emoji: data.emoji.slice(0, 4), id: data.eventId });
+    } else if (data.type === 'reset') {
+      resetBoard();
+      setStatus('White to move · new online game');
+    } else if (data.type === 'leave' || data.type === 'disconnected') {
+      setStatus('Friend disconnected');
+    }
+  // online.event uniquely identifies incoming messages; game is intentionally read from this render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online.event]);
+
+  useEffect(() => {
+    if (!reaction) return undefined;
+    const timer = window.setTimeout(() => setReaction(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [reaction]);
+
   const handleUndo = () => {
-    if (!settings.enableUndo || moveHistory.length === 0 || undoRemaining <= 0) return;
+    if (gameMode === 'online' || !settings.enableUndo || moveHistory.length === 0 || undoRemaining <= 0) return;
 
     const trimmedHistory = moveHistory.slice(0, -1);
     const rebuilt = new Chess();
@@ -252,6 +317,7 @@ function App() {
     const piece = game.get(square);
 
     if (gameMode === 'ai' && game.turn() !== settings.playerColor) return;
+    if (gameMode === 'online' && (online.status !== 'playing' || game.turn() !== online.playerColor)) return;
 
     if (selectedSquare && legalMoves.some((move) => move.to === square)) {
       const selectedPiece = game.get(selectedSquare);
@@ -289,6 +355,13 @@ function App() {
     ? legalMoves
     : (hintVisible && suggestedMove ? [{ to: suggestedMove.to }] : []);
 
+  useEffect(() => {
+    if (!gameResult || recordedResultRef.current) return;
+    recordedResultRef.current = true;
+    const winner = game.isCheckmate() ? (game.turn() === 'w' ? 'Black' : 'White') : 'Draw';
+    setMatchHistory((items) => [{ id: Date.now(), winner, mode: gameMode, moves: moveHistory.length, playedAt: new Date().toLocaleString() }, ...items].slice(0, 30));
+  }, [game, gameMode, gameResult, moveHistory.length]);
+
   const toggleFullscreen = async () => {
     try {
       if (document.fullscreenElement) {
@@ -312,7 +385,7 @@ function App() {
         <div className="nebula nebula-2" />
 
         <TopBar
-          onReset={resetBoard}
+          onReset={resetCurrentGame}
           onUndo={handleUndo}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenHowToPlay={() => setHowToPlayOpen(true)}
@@ -339,7 +412,7 @@ function App() {
             tabIndex={historyOpen ? 0 : -1}
           />
           <div className={`game-sidebar${historyOpen ? ' is-open' : ''}`} aria-hidden={!historyOpen}>
-            <MoveHistoryPanel moveHistory={moveHistory} onClose={() => setHistoryOpen(false)} />
+            <MoveHistoryPanel moveHistory={moveHistory} matchHistory={matchHistory} onClose={() => setHistoryOpen(false)} />
           </div>
           <section className="board-panel glass-panel">
             <div className="board-frame">
@@ -364,6 +437,9 @@ function App() {
                 aria-pressed={topView}
               >
                 {topView ? '3D View' : '2D View'}
+              </button>
+              <button className={`online-play-button${online.status === 'playing' ? ' is-live' : ''}`} onClick={() => { setGameMode('online'); setSettings((prev) => ({ ...prev, mode: 'online' })); setOnlineLobbyOpen(true); }}>
+                <span className="live-dot" />{online.status === 'playing' ? 'Online' : 'Play online'}
               </button>
               <button
                 className="fullscreen-toggle-button"
@@ -412,15 +488,21 @@ function App() {
                   )}
                 </>
               )}
-              {gameResult && <GameOverOverlay result={gameResult} onNewMatch={resetBoard} />}
+              {gameResult && <GameOverOverlay result={gameResult} onNewMatch={resetCurrentGame} />}
+              {reaction && <div key={reaction.id} className="chess-reaction-burst"><span>{reaction.emoji}</span><small>Friend reacted!</small></div>}
+              {gameMode === 'online' && online.status === 'playing' && <OnlineSocial
+                messages={chatMessages}
+                onSendMessage={(text) => {
+                  if (online.send({ type: 'chat', text })) setChatMessages((items) => [...items, { id: `${Date.now()}-mine`, text, mine: true }].slice(-60));
+                }}
+                onReaction={(emoji) => online.send({ type: 'reaction', emoji })}
+                onLeave={() => { online.close(true); setGameMode('local'); setSettings((prev) => ({ ...prev, mode: 'local' })); }}
+              />}
             </div>
           </section>
 
         </main>
-        <footer className="creator-credit">
-          <span>Creator</span>
-          <strong>Soumya Pal</strong>
-        </footer>
+        <AppFooter onOpenLegal={setLegalOpen} />
       </div>
 
       {settingsOpen && (
@@ -429,7 +511,7 @@ function App() {
           topView={topView}
           isFullscreen={isFullscreen}
           onNewGame={() => {
-            resetBoard();
+            resetCurrentGame();
             setSettingsOpen(false);
           }}
           onToggleView={() => setTopView((current) => !current)}
@@ -445,6 +527,8 @@ function App() {
             if (key === 'mode') {
               setGameMode(value);
               setSettings((prev) => ({ ...prev, mode: value }));
+              if (value === 'online') setOnlineLobbyOpen(true);
+              else if (online.status !== 'idle') online.close(true);
               return;
             }
             if (key === 'playerColor') {
@@ -459,6 +543,9 @@ function App() {
       )}
 
       {howToPlayOpen && <HowToPlayModal onClose={() => setHowToPlayOpen(false)} palette={palette} />}
+
+      {onlineLobbyOpen && <OnlineLobby online={online} onClose={() => setOnlineLobbyOpen(false)} />}
+      {legalOpen && <LegalModal type={legalOpen} onClose={() => setLegalOpen(null)} />}
 
       {pendingPromotion && (
         <PromotionModal
