@@ -14,8 +14,17 @@ export default function OnlineSocial({ messages, onSendMessage, onReaction, onLe
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(false);
   const endRef = useRef(null);
+  const socialRef = useRef(null);
   const messageCountRef = useRef(messages.length);
   useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!socialRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, [open]);
   useEffect(() => {
     const latest = messages[messages.length - 1];
     if (messages.length > messageCountRef.current && latest && !latest.mine && !open) setUnread(true);
@@ -28,7 +37,7 @@ export default function OnlineSocial({ messages, onSendMessage, onReaction, onLe
     onSendMessage(value);
     setText('');
   };
-  return <div className="online-social">
+  return <div className="online-social" ref={socialRef}>
     {open && <aside className="online-social-popup glass-panel">
       <header><strong>Reactions & messages</strong><button onClick={() => setOpen(false)} aria-label="Close chat">✕</button></header>
       <div className="chat-log">{messages.length === 0 ? <p>No messages yet. Say hello!</p> : messages.map((message) => <div key={message.id} className={`chat-message ${message.mine ? 'mine' : 'theirs'}`}><small>{message.mine ? 'YOU' : 'FRIEND'}</small><span>{message.text}</span></div>)}<i ref={endRef}/></div>
