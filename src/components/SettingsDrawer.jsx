@@ -30,7 +30,9 @@ function CustomSelect({ value, options, onChange, ariaLabel }) {
         onClick={() => setOpen((current) => !current)}
       >
         <span>{selected.label}</span>
-        <span className="select-chevron" aria-hidden="true">⌄</span>
+        <svg className="select-chevron" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="m5 7.5 5 5 5-5" />
+        </svg>
       </button>
       {open && (
         <div className="custom-select-menu" role="listbox" aria-label={ariaLabel}>

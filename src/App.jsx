@@ -42,6 +42,7 @@ function App() {
   const [settings, setSettings] = useState(defaultSettings);
   const [gameMode, setGameMode] = useState(defaultSettings.mode);
   const [status, setStatus] = useState('White to move');
+  const [gameTime, setGameTime] = useState(0);
   const [undoRemaining, setUndoRemaining] = useState(3);
   const [topView, setTopView] = useState(false);
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
@@ -110,6 +111,12 @@ function App() {
     const revealTimer = window.setTimeout(() => setAssetsReady(true), 120);
     return () => window.clearTimeout(revealTimer);
   }, [loaderProgress, modelsReady]);
+
+  useEffect(() => {
+    if (!assetsReady || game.isGameOver()) return undefined;
+    const timer = window.setInterval(() => setGameTime((seconds) => seconds + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [assetsReady, game]);
 
   const board = useMemo(() => game.board(), [game]);
   const palette = PALETTE_MAP[settings.palette] || PALETTE_MAP.classic;
@@ -185,6 +192,7 @@ function App() {
     setLegalMoves([]);
     setUndoRemaining(3);
     setStatus('White to move');
+    setGameTime(0);
     setPendingPromotion(null);
     setPromotionChoice('q');
     setHintVisible(false);
@@ -354,6 +362,10 @@ function App() {
   const boardLegalMoves = selectedSquare
     ? legalMoves
     : (hintVisible && suggestedMove ? [{ to: suggestedMove.to }] : []);
+  const isMyTurn = !game.isGameOver() && (
+    (gameMode === 'ai' && game.turn() === settings.playerColor)
+    || (gameMode === 'online' && online.status === 'playing' && game.turn() === online.playerColor)
+  );
 
   useEffect(() => {
     if (!gameResult || recordedResultRef.current) return;
@@ -390,8 +402,12 @@ function App() {
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenHowToPlay={() => setHowToPlayOpen(true)}
           undoCount={undoRemaining}
+          undoDisabled={gameMode === 'online' || !settings.enableUndo || moveHistory.length === 0}
+          showUndo={gameMode !== 'online'}
           infoExpanded={matchInfoExpanded}
           onToggleInfo={() => setMatchInfoExpanded((expanded) => !expanded)}
+          showSettings={gameMode !== 'online'}
+          showNewMatch={gameMode !== 'online'}
         >
           <MatchPanel
             status={status}
@@ -401,6 +417,7 @@ function App() {
             historyLength={moveHistory.length}
             paletteName={{ classic: 'Classic', gold: 'Golden', neon: 'Neon' }[settings.palette]}
             aiDifficulty={settings.aiDifficulty || 'easy'}
+            gameTime={gameTime}
           />
         </TopBar>
 
@@ -465,6 +482,7 @@ function App() {
                 <span>Moves</span>
                 <strong>{moveHistory.length}</strong>
               </button>
+              {isMyTurn && <div className="your-turn-badge" role="status">Your turn</div>}
               {settings.showHints && (
                 <>
                   <button

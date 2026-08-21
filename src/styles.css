@@ -949,9 +949,15 @@ h1 {
 }
 
 .select-chevron {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   color: #87cfff;
-  font-size: 1.15rem;
-  line-height: 1;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   transition: transform 0.18s ease;
 }
 
@@ -1481,6 +1487,28 @@ button:disabled {
   box-shadow: 0 0 18px rgba(255, 213, 74, 0.2);
 }
 
+.your-turn-badge {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 5;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 7px 14px;
+  color: #f7f9fc;
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 46%, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  background: rgba(15, 18, 23, 0.9);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(8px);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
 @media (max-width: 560px) {
   .hint-bulb-button {
     top: 8px;
@@ -1496,6 +1524,12 @@ button:disabled {
     bottom: auto;
     left: 48px;
     max-width: calc(100% - 112px);
+    font-size: 0.68rem;
+  }
+  .your-turn-badge {
+    top: 8px;
+    min-height: 34px;
+    padding: 6px 11px;
     font-size: 0.68rem;
   }
 }
@@ -2608,7 +2642,9 @@ body,
 
 .asset-loader-progress-wrap {
   position: relative;
+  align-self: end;
   width: min(420px, 88vw);
+  margin-bottom: clamp(28px, 7vh, 72px);
   padding: 0;
   animation: loader-enter 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -2932,11 +2968,71 @@ body,
   transition: transform 220ms ease;
 }
 
-.topbar.info-collapsed .info-toggle-button svg { transform: rotate(-90deg); }
+.info-toggle-button .info-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.topbar.info-collapsed .info-toggle-button .info-chevron { transform: rotate(-90deg); }
 
 @media (max-width: 560px) {
   .info-toggle-button span { display: none; }
-  .info-toggle-button { width: 34px; justify-content: center; padding: 6px; }
+  .info-toggle-button { width: 48px; justify-content: center; padding: 6px; }
+}
+
+@media (max-width: 760px) {
+  .info-toggle-button > span { display: none; }
+  .topbar {
+    align-items: center;
+  }
+
+  .topbar-brand,
+  .title-row,
+  .topbar-actions {
+    align-items: center;
+  }
+
+  .topbar-actions {
+    align-self: center;
+    flex-wrap: nowrap;
+  }
+
+  .info-toggle-button {
+    width: 48px;
+    min-width: 48px;
+    height: 34px;
+    min-height: 34px;
+    justify-content: center;
+    padding: 6px;
+  }
+
+  .topbar .undo-button,
+  .topbar .icon-button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    margin: 0;
+  }
+
+  .topbar .undo-button {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .topbar .undo-button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .info-toggle-button svg,
+  .topbar-actions button svg {
+    display: block;
+  }
 }
 
 .settings-actions-section { padding-bottom: 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
@@ -3100,6 +3196,118 @@ body,
   }
 }
 
+/* Match information opens as a header-anchored popup. */
+.topbar {
+  overflow: visible;
+  z-index: 90;
+}
+
+.topbar-match {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  z-index: 91;
+  width: min(760px, calc(100vw - 20px));
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 32%, rgba(255, 255, 255, 0.1));
+  border-radius: 14px;
+  background: rgba(14, 18, 26, 0.97);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(18px);
+  transform-origin: top right;
+}
+
+.topbar.info-collapsed .topbar-match {
+  padding: 0 10px;
+  visibility: hidden;
+  transform: translateY(-6px) scale(0.985);
+}
+
+@media (max-width: 760px) {
+  .topbar-match {
+    right: 0;
+    left: 0;
+    width: 100%;
+  }
+}
+
+/* Shared hover feedback for every interactive button. */
+button:not(:disabled) {
+  transition-property: color, background, border-color, box-shadow, transform, filter;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.12) saturate(1.06);
+}
+
+button:not(:disabled):active {
+  filter: brightness(0.96);
+}
+
+/* Compact, cozy overlays */
+.game-sidebar {
+  width: 300px;
+  max-width: calc(100vw - 20px);
+  height: 60vh;
+  max-height: 60vh;
+  inset: auto auto 62px 16px;
+}
+
+.settings-overlay {
+  z-index: 200;
+  padding: 16px;
+  background: rgba(7, 8, 10, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.settings-drawer {
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(680px, calc(100dvh - 32px));
+  padding: 18px 18px 30px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 18px;
+  background: #17191d;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.48);
+}
+
+.settings-drawer .panel-header {
+  margin-bottom: 14px;
+}
+
+.settings-drawer .panel-header h3 {
+  font-size: 1rem;
+}
+
+.settings-drawer .drawer-eyebrow {
+  color: #9b9388;
+  letter-spacing: 0.1em;
+}
+
+.settings-drawer .settings-list {
+  gap: 11px;
+}
+
+.settings-drawer .custom-select-trigger,
+.settings-drawer .toggle-row,
+.settings-drawer .settings-summary {
+  border-color: rgba(255, 255, 255, 0.07);
+  background: #1e2024;
+  box-shadow: none;
+}
+
+.settings-drawer .toggle-row {
+  min-height: 42px;
+  padding: 9px 11px;
+  border-radius: 11px;
+}
+
+.settings-drawer .settings-action-grid button {
+  background: #1e2024;
+}
+
 /* Desktop: keep the entire game workspace inside one viewport. */
 @media (min-width: 761px) {
   html,
@@ -3190,6 +3398,19 @@ body,
 .room-code-card > strong { display: block; margin: 7px 0 12px; color: var(--theme-accent); font-size: 1.55rem; letter-spacing: .08em; }
 .room-code-card > div { display: flex; justify-content: center; gap: 8px; }
 .room-code-card button, .online-connected button { padding: 8px 11px; color: #fff; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; background: rgba(255,255,255,.08); }
+.room-code-card button:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 72%, white);
+  background: color-mix(in srgb, var(--theme-accent) 18%, rgba(255,255,255,.08));
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--theme-accent) 18%, transparent);
+  transform: translateY(-2px);
+}
+.room-code-card button:active {
+  box-shadow: none;
+  transform: translateY(0);
+}
+.topbar-match .meta-grid {
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+}
 .room-code-card p { margin: 13px 0 0; color: #9caabd; font-size: .78rem; }
 .join-room-row { margin-top: 18px; }
 .join-room-row > span { display: block; margin-bottom: 7px; color: #8391a6; font-size: .66rem; letter-spacing: .1em; }
@@ -3257,14 +3478,14 @@ body,
   .topbar {
     position: relative;
     overflow: visible;
-    z-index: 30;
+    z-index: 90;
   }
 
   .topbar-match {
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    z-index: 31;
+    z-index: 91;
     width: 100%;
     max-height: 170px;
     padding: 8px;
@@ -3306,5 +3527,30 @@ body,
     width: auto;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     scroll-snap-align: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar-actions .undo-button {
+    flex: 0 0 34px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 7px;
+    border-radius: 9px;
+  }
+
+  .topbar-actions .undo-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .topbar .topbar-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    justify-self: end;
+    align-self: center;
   }
 }

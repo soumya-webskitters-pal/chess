@@ -1,13 +1,22 @@
 import { useState } from 'react';
 
 export default function OnlineLobby({ online, onClose }) {
-  const [code, setCode] = useState(() => new URLSearchParams(window.location.search).get('room') || '');
+  const [code, setCode] = useState(() => new URLSearchParams(window.location.search).get('room') || 'chess-');
   const share = async () => {
-    const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(online.roomCode)}`;
+    const SHARE_TEXT = 'Play chess with me live!';
+    const APK_URL = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(online.roomCode)}`;
+
     if (navigator.share) {
-      try { await navigator.share({ title: 'Quantum Chess', text: 'Play chess with me live!', url }); return; } catch (error) { if (error.name === 'AbortError') return; }
+      try {
+        await navigator.share({
+          title: 'Quantum Board',
+          text: SHARE_TEXT,
+          url: APK_URL,
+        });
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(`${SHARE_TEXT}\n${APK_URL}`);
     }
-    await navigator.clipboard?.writeText(url);
   };
   const busy = ['creating', 'waiting', 'joining'].includes(online.status);
 
